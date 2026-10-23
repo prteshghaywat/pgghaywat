@@ -1,0 +1,65 @@
+
+name: Create and Test Kind Multinode Cluster
+
+on:
+  # push:
+  #   branches: [main]
+  # pull_request:
+  #   branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kind-multinode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install kind
+        uses: helm/kind-action@v1.12.0
+        with:
+          version: v0.30.0
+          install_only: true
+
+      - name: Create three-node cluster
+        run: |
+          kind create cluster \
+            --name platform-lab \
+            --image kindest/node:v1.33.1 \
+            --config kind/multinode.yaml \
+            --wait 180s
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.33.1
+
+      - name: Verify nodes
+        run: |
+          kubectl cluster-info --context kind-platform-lab
+          kubectl get nodes -o wide
+          kubectl wait --for=condition=Ready nodes --all --timeout=180s
+
+      - name: Deploy NGINX
+        run: |
+          kubectl create deployment nginx --image=nginx:stable
+          kubectl rollout status deployment/nginx --timeout=180s
+          kubectl get pods -o wide
+          kubectl expose deployment nginx --port=80 --type=ClusterIP
+          kubectl get services
+
+      - name: Collect diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get nodes -o wide || true
+          kubectl get pods -A -o wide || true
+          kubectl get events -A --sort-by=.lastTimestamp || true
+
+      - name: Delete cluster
+        if: always()
+        run: kind delete cluster --name platform-lab
