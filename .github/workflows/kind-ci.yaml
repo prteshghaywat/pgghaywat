@@ -60,6 +60,6 @@ jobs:
           kubectl get pods -A -o wide || true
           kubectl get events -A --sort-by=.lastTimestamp || true
 
-      - name: Delete cluster
-        if: always()
-        run: kind delete cluster --name platform-lab
+      # - name: Delete cluster
+      #   if: always()
+      #   run: kind delete cluster --name platform-lab
